@@ -319,10 +319,12 @@ elif choice == "Check In":
         else:
             # Start WebRTC Streamer
             webrtc_streamer(
-                key="attendance-realtime",
-                video_processor_factory=FaceRecognitionProcessor,
+                key="realtime-attendance",
+                video_processor_factory=FaceRecognitionProcessor, # Kept original processor
+                rtc_configuration={
+                    "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
+                },
                 media_stream_constraints={"video": True, "audio": False},
-                rtc_configuration=RTCConfiguration({"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}) # STUN server for cloud deployment
             )
 
     # VIEW ATTENDANCE TABLE
