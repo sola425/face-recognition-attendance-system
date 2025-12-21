@@ -1,35 +1,47 @@
-# Use an official Python runtime as a parent image
-FROM python:3.9-slim
+# Base Image: Miniconda (Pre-configured with Conda package manager)
+FROM continuumio/miniconda3
 
-# Install system dependencies required for dlib and opencv
+# 1. Install System Libraries (Required for OpenCV/Use of Camera)
 RUN apt-get update && apt-get install -y \
-    cmake \
-    build-essential \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Set up a new user named "user" with user ID 1000
+# 2. Install Heavy AI Libraries via Conda (Fast & Pre-compiled)
+# This installs dlib, face_recognition, and numpy binaries in seconds.
+RUN conda install -y -c conda-forge \
+    dlib \
+    face_recognition \
+    numpy \
+    opencv
+
+# 3. Install Web UI Libraries via Pip
+# We list them here directly to avoid conflicts with local requirements.txt
+RUN pip install --no-cache-dir \
+    streamlit \
+    streamlit-webrtc \
+    av \
+    setuptools
+
+# 4. Set Up Application
+WORKDIR /app
+COPY . .
+
+# 5. Security: Run as non-root user (Required by Hugging Face)
 RUN useradd -m -u 1000 user
-
-# Switch to the "user" user
 USER user
+ENV PATH="/home/user/.local/bin:$PATH"
 
-# Set home to the user's home directory
-ENV HOME=/home/user \
-	PATH=/home/user/.local/bin:$PATH
+# 6. Launch
+CMD ["streamlit", "run", "app.py", "--server.port", "7860", "--server.address", "0.0.0.0"]
 
-# Set the working directory to the user's home directory
-WORKDIR $HOME/app
+# Copy the rest of the application
+COPY . .
 
-# Copy the current directory contents into the container at $HOME/app setting the owner to the user
-COPY --chown=user . $HOME/app
+# Create a user to avoid running as root (Good practice & required by some spaces)
+RUN useradd -m -u 1000 user
+USER user
+ENV PATH="/home/user/.local/bin:$PATH"
 
-# Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir --upgrade -r requirements.txt
-
-# Make port 7860 available to the world outside this container
-EXPOSE 7860
-
-# Run app.py when the container launches
-CMD ["streamlit", "run", "app.py", "--server.port=7860", "--server.address=0.0.0.0"]
+# Run the app
+CMD ["streamlit", "run", "app.py", "--server.port", "7860", "--server.address", "0.0.0.0"]

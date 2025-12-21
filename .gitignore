@@ -30,3 +30,7 @@ secrets.toml
 # OS
 .DS_Store
 Thumbs.db
+ 
+# Large data and binaries for local use only
+Images_Attendance/
+archive/dlib-*.whl
