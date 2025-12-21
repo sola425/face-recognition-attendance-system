@@ -29,6 +29,7 @@ COPY . .
 
 # 5. Security: Run as non-root user (Required by Hugging Face)
 RUN useradd -m -u 1000 user
+RUN chown -R user:user /app
 USER user
 ENV PATH="/home/user/.local/bin:$PATH"
 
