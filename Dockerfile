@@ -35,13 +35,3 @@ ENV PATH="/home/user/.local/bin:$PATH"
 # 6. Launch
 CMD ["streamlit", "run", "app.py", "--server.port", "7860", "--server.address", "0.0.0.0"]
 
-# Copy the rest of the application
-COPY . .
-
-# Create a user to avoid running as root (Good practice & required by some spaces)
-RUN useradd -m -u 1000 user
-USER user
-ENV PATH="/home/user/.local/bin:$PATH"
-
-# Run the app
-CMD ["streamlit", "run", "app.py", "--server.port", "7860", "--server.address", "0.0.0.0"]
