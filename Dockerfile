@@ -13,7 +13,8 @@ RUN conda install -y -c conda-forge \
     dlib \
     face_recognition \
     numpy \
-    opencv
+    opencv \
+    python=3.9
 
 # 3. Install Web UI Libraries via Pip
 # We list them here directly to avoid conflicts with local requirements.txt

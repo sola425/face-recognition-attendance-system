@@ -76,6 +76,7 @@ def load_encodings():
                     name_base = os.path.splitext(cl)[0]
                     names_list.append(name_base.split('_')[0] if '_' in name_base else name_base)
     
+    st.toast(f"System Loaded: {len(names_list)} profiles found.", icon="✅")
     return encodings_list, names_list
 
 def mark_attendance(name):
