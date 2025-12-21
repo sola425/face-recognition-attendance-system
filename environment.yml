@@ -1,0 +1,13 @@
+name: face-recognition-env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - dlib
+  - face_recognition
+  - opencv
+  - streamlit
+  - numpy
+  - pip:
+    - streamlit-webrtc
