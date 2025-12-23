@@ -76,7 +76,6 @@ def load_encodings():
                     name_base = os.path.splitext(cl)[0]
                     names_list.append(name_base.split('_')[0] if '_' in name_base else name_base)
     
-    st.toast(f"System Loaded: {len(names_list)} profiles found.", icon="✅")
     return encodings_list, names_list
 
 def mark_attendance(name):
@@ -265,6 +264,9 @@ elif choice == "Check In":
             st.error(f"Error loading encodings: {e}")
             knownEncodings = []
             classNames = []
+            
+    if classNames:
+        st.toast(f"System Loaded: {len(classNames)} profiles found.", icon="✅")
 
     # Two Check-in Modes
     mode = st.radio("Select Method:", ["Simple Mode (Take Photo)", "Real-Time / Liveness (Video)"], horizontal=True)
