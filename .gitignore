@@ -20,7 +20,7 @@ env.bak/
 venv.bak/
 
 # Streamlit
-.streamlit/
+
 secrets.toml
 
 # IDEs

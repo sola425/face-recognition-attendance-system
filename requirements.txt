@@ -1,7 +1,8 @@
+streamlit
+face-recognition
 opencv-python-headless
 numpy
-streamlit
-face_recognition
+pandas
 streamlit-webrtc
 av
 setuptools
