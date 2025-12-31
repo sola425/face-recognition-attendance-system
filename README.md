@@ -16,7 +16,7 @@ license: mit
 
 A robust, real-time Facial Recognition system built with Python, OpenCV, and Streamlit. This project includes both a **Desktop Agent** (with Liveness Detection) and a **Web Application** (deployed on Hugging Face Spaces).
 
-![Banner Placeholder](https://via.placeholder.com/1000x200?text=Face+Recognition+Attendance+System)
+
 
 ## 🌟 Key Features
 
@@ -74,8 +74,8 @@ This script runs in the **Browser** (via Streamlit). It's user-friendly and grea
 1.  **Sidebar Menu**: Allows you to switch between "Check In", "Register New User", and "View Logs".
 2.  **Registration Mode**:
     - You type a name and take a photo.
-    - The app saves the photo as `Name.jpg` in the `Images_Attendance` folder.
-    - *Magic*: This file is automatically picked up by `main.py` next time it runs!
+    - The app saves the photo as `Name.jpg` in the `Images_Attendance` folder .
+    
 3.  **Check-In Mode**:
     - Works similarly to `main.py` but processes single images (uploaded or snapped) instead of a video stream.
 4.  **View Logs**: Reads `Attendance.csv` using `pandas` and displays it as a neat table.
