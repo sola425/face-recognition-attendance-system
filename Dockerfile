@@ -1,37 +1,39 @@
-# Base Image: Miniconda (Pre-configured with Conda package manager)
-FROM continuumio/miniconda3
+# Base Image: Miniforge3 (Uses Mamba - Faster & More Stable than Conda)
+FROM condaforge/miniforge3
 
-# 1. Install System Libraries (Required for OpenCV/Use of Camera)
+# 1. Install System Libraries (Required for OpenCV)
 RUN apt-get update && apt-get install -y \
     libgl1 \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. Install Heavy AI Libraries via Conda (Fast & Pre-compiled)
-# This installs dlib, face_recognition, and numpy binaries in seconds.
-RUN conda install -y -c conda-forge \
+# 2. Install Heavy AI Libraries via Mamba (Solves specific "Segfault" error)
+RUN mamba install -y -c conda-forge \
+    python=3.9 \
     dlib \
     face_recognition \
     numpy \
     opencv \
-    python=3.9
+    && mamba clean -afy
 
 # 3. Install Web UI Libraries via Pip
-# We list them here directly to avoid conflicts with local requirements.txt
 RUN pip install --no-cache-dir \
     streamlit \
     streamlit-webrtc \
     av \
-    setuptools
+    setuptools \
+    pandas
 
 # 4. Set Up Application
 WORKDIR /app
 COPY . .
 
 # 5. Security: Run as non-root user (Required by Hugging Face)
-RUN useradd -m -u 1000 user
-RUN chown -R user:user /app
-USER user
+# Handle potential pre-existing user 1000
+RUN useradd -m -u 1000 user || true
+RUN chown -R 1000:1000 /app
+USER 1000
+ENV HOME=/app
 ENV PATH="/home/user/.local/bin:$PATH"
 
 # 6. Launch

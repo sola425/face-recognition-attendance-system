@@ -1,260 +1,298 @@
 import streamlit as st
-import face_recognition
 import cv2
 import numpy as np
+import face_recognition
 import os
 import pandas as pd
 from datetime import datetime
+import tempfile
+import shutil
+import glob
 
-# ==========================================
-# 1. Setup & Config
-# ==========================================
-st.set_page_config(page_title="Easy Attendance System", layout="wide")
+# --- CONFIGURATION ---
+st.set_page_config(page_title="AI Attendance System", layout="centered", page_icon="📍")
 
-PATH_IMAGES = 'Images_Attendance'
-FILE_DB = 'Attendance.csv'
-
-if not os.path.exists(PATH_IMAGES):
-    os.makedirs(PATH_IMAGES)
-
-# Ensure CSV exists with headers
-if not os.path.exists(FILE_DB):
-    df = pd.DataFrame(columns=['Name', 'Time', 'Date'])
-    df.to_csv(FILE_DB, index=False)
-
-# ==========================================
-# 2. Optimized Helper Functions
-# ==========================================
+# --- STORAGE SETUP ---
+DEFAULT_IMG_FOLDER = 'Images_Attendance'
+DEFAULT_CSV_FILE = 'attendance_log.csv'
 
 @st.cache_resource
-def get_known_faces():
+def setup_storage():
     """
-    Load images once and cache them. 
-    Returns: known_encodings, known_names
+    Sets up the storage environment.
+    - Resolves absolute path to find the Repo folder `Images_Attendance`.
+    - Copies files to Temp if Read-Only.
     """
-    encodings = []
-    names = []
+    is_temp = False
+    img_folder = DEFAULT_IMG_FOLDER
+    csv_file = DEFAULT_CSV_FILE
     
-    # scan folder
-    files = [f for f in os.listdir(PATH_IMAGES) if f.endswith(('.jpg', '.jpeg', '.png'))]
-    
-    if not files:
-        return [], []
+    # 1. Resolve Absolute Repo Path
+    curr_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_img_path = os.path.join(curr_dir, DEFAULT_IMG_FOLDER)
 
-    # Optional: Logic to show loading progress
-    # on first load, this might take a moment
-    
-    for file in files:
-        try:
-            img_path = os.path.join(PATH_IMAGES, file)
-            img = cv2.imread(img_path)
-            if img is None:
-                continue
-                
-            # Resize if too big (limit width to 800px)
-            height, width = img.shape[:2]
-            if width > 800:
-                scale = 800 / width
-                img = cv2.resize(img, (0, 0), fx=scale, fy=scale)
-            
-            img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            results = face_recognition.face_encodings(img_rgb)
-            
-            # Rotation checks if no face found initially
-            if not results:
-                # 90 clockwise
-                img_cw = cv2.rotate(img_rgb, cv2.ROTATE_90_CLOCKWISE)
-                results = face_recognition.face_encodings(img_cw)
-            
-            if not results:
-                # 270 (90 ccw)
-                img_ccw = cv2.rotate(img_rgb, cv2.ROTATE_90_COUNTERCLOCKWISE)
-                results = face_recognition.face_encodings(img_ccw)
+    copied_count = 0
 
-            if results:
-                encodings.append(results[0])
-                names.append(os.path.splitext(file)[0].replace('_', ' '))
-                
-        except Exception as e:
-            print(f"Error loading {file}: {e}")
-            
-    return encodings, names
-
-def mark_in_csv(name):
-    """
-    Uses Pandas to check and log attendance.
-    """
     try:
-        if not os.path.exists(FILE_DB):
-             df = pd.DataFrame(columns=['Name', 'Time', 'Date'])
-        else:
-             df = pd.read_csv(FILE_DB)
-             
-        now = datetime.now()
-        date_str = now.strftime('%Y-%m-%d')
-        time_str = now.strftime('%H:%M:%S')
+        # 2. Try to write to Default
+        os.makedirs(repo_img_path, exist_ok=True)
+        test_file = os.path.join(repo_img_path, '.test')
+        with open(test_file, 'w') as f:
+             f.write('test')
+        os.remove(test_file)
+        
+        # Check CSV
+        if not os.path.exists(DEFAULT_CSV_FILE):
+             with open(DEFAULT_CSV_FILE, 'w') as f:
+                 f.write('')
+                 
+    except OSError:
+        # READ-ONLY: Switch to Temp
+        is_temp = True
+        temp_dir = tempfile.mkdtemp(prefix="face_rec_app_")
+        img_folder = temp_dir
+        csv_file = os.path.join(temp_dir, 'attendance_log.csv')
+        
+        # 3. SYNC: Copy from Repo -> Temp
+        if os.path.exists(repo_img_path):
+            # grab both jpg and png
+            files = glob.glob(os.path.join(repo_img_path, "*")) 
+            for s in files:
+                if s.lower().endswith(('.jpg', '.jpeg', '.png')):
+                     d = os.path.join(img_folder, os.path.basename(s))
+                     try:
+                         shutil.copy2(s, d)
+                         copied_count += 1
+                     except Exception:
+                         pass
 
-        # Check if name exists for today's date
-        if df.empty:
-             is_marked = False
-        else:
-             is_marked = ((df['Name'] == name) & (df['Date'] == date_str)).any()
+    return img_folder, csv_file, is_temp, copied_count
 
-        if not is_marked:
-            new_entry = pd.DataFrame({'Name': [name], 'Time': [time_str], 'Date': [date_str]})
-            df = pd.concat([df, new_entry], ignore_index=True)
-            df.to_csv(FILE_DB, index=False)
-            return "Marked ✅"
-        return "Already Checked In ⚠️"
+IMG_FOLDER, CSV_FILE, IS_TEMP_STORAGE, COPIED_COUNT = setup_storage()
+
+# Ensure CSV
+if not os.path.exists(CSV_FILE):
+    try:
+        pd.DataFrame(columns=['Name', 'Time', 'Date']).to_csv(CSV_FILE, index=False)
+    except:
+        pass
+
+# --- HELPER FUNCTIONS ---
+
+@st.cache_data
+def load_registered_faces():
+    known_encodings = []
+    known_names = []
+    
+    if os.path.exists(IMG_FOLDER):
+        files = [f for f in os.listdir(IMG_FOLDER) if f.lower().endswith(('.jpg', '.png', '.jpeg'))]
+        for file in files:
+            path = os.path.join(IMG_FOLDER, file)
+            try:
+                img = face_recognition.load_image_file(path)
+                encodings = face_recognition.face_encodings(img)
+                if encodings:
+                    known_encodings.append(encodings[0])
+                    name = os.path.splitext(file)[0].replace('_', ' ')
+                    known_names.append(name)
+            except Exception:
+                pass
+    return known_encodings, known_names
+
+def mark_attendance(name):
+    try:
+        df = pd.read_csv(CSV_FILE)
+    except:
+        df = pd.DataFrame(columns=['Name', 'Time', 'Date'])
+
+    now = datetime.now()
+    today_date = now.strftime('%Y-%m-%d')
+    current_time = now.strftime('%H:%M:%S')
+
+    if not df.empty:
+        already_present = df[(df['Name'] == name) & (df['Date'] == today_date)]
+        if not already_present.empty:
+            return False, "Already checked in today!"
+
+    new_entry = pd.DataFrame({'Name': [name], 'Time': [current_time], 'Date': [today_date]})
+    try:
+        new_entry.to_csv(CSV_FILE, mode='a', header=False, index=False)
+        return True, f"Welcome, {name}! Attendance marked."
     except Exception as e:
-        return f"Error: {str(e)}"
+        return False, f"Error saving attendance: {e}"
 
-# ==========================================
-# 3. Main App UI
-# ==========================================
+# --- MAIN UI ---
 
-st.title("📍 Easy Attendance System")
-menu = ["Check In", "Register User", "View Log"]
+st.title("📍 AI Face Attendance")
+
+# Sidebar Info
+if IS_TEMP_STORAGE:
+    st.sidebar.warning(f"⚠️ Read-Only Mode. Copied {COPIED_COUNT} images from repo.")
+else:
+    st.sidebar.success(f"✅ Persistent Mode. Accessing {IMG_FOLDER}")
+
+with st.sidebar.expander("🛠️ Debug Info"):
+    if os.path.exists(IMG_FOLDER):
+        files = os.listdir(IMG_FOLDER)
+        st.write(f"Images in buffer ({len(files)}):")
+        st.write(files)
+
+menu = ["Check In", "Register New User", "View Logs"]
 choice = st.sidebar.selectbox("Menu", menu)
 
-# --- REGISTER USER ---
-if choice == "Register User":
-    st.subheader("Register New Face")
-    name = st.text_input("Enter Name:")
-    picture = st.camera_input("Take a clear selfie")
+if choice == "Register New User":
+    st.subheader("📝 Register New Face")
     
-    if st.button("Save Profile"):
-        if name and picture:
-            bytes_data = picture.getvalue()
-            cv2_img = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
-            
-            filename = f"{name.replace(' ', '_')}.jpg"
-            cv2.imwrite(os.path.join(PATH_IMAGES, filename), cv2_img)
-            
-            st.success(f"Registered {name} successfully!")
-            st.cache_resource.clear()
-        else:
-            st.error("Please provide both a name and a photo.")
+    # 1. Initialize State for Image BYTES
+    if 'reg_img_bytes' not in st.session_state:
+        st.session_state.reg_img_bytes = None
 
-# --- CHECK IN ---
-elif choice == "Check In":
-    st.subheader("Mark Attendance")
+    new_name = st.text_input("Enter Full Name")
     
-    with st.spinner("Loading face database..."):
-        known_enc, known_names = get_known_faces()
-        
-    if not known_names:
-        st.warning("No users registered yet. Please register first.")
+    # 2. Input Method
+    tab1, tab2 = st.tabs(["📸 Camera", "📂 Upload"])
     
-    st.write(f"**System Ready**: {len(known_names)} users in database.")
-
-    # TABS instead of Radio for better UI
-    tab1, tab2 = st.tabs(["📸 Take Snapshot", "📂 Upload Photo"])
-
-    img_input = None
-
-    # Tab 1: Snapshot
     with tab1:
-        st.info("Use your camera to take a snapshot.")
-        snapshot = st.camera_input("Take Snapshot", key="snapshot_cam")
-        if snapshot:
-            img_input = snapshot
-
-    # Tab 2: Upload
+        cam_input = st.camera_input("Take a Selfie", key="camera_widget")
+        if cam_input:
+            # SAVE BYTES IMMEDIATELY
+            st.session_state.reg_img_bytes = cam_input.getvalue()
+    
     with tab2:
-        st.info("Upload an image file (JPG, PNG).")
-        uploaded = st.file_uploader("Choose a file", type=['jpg', 'jpeg', 'png'], key="upload_cam")
-        if uploaded:
-            img_input = uploaded
+        up_input = st.file_uploader("Upload Image", type=['jpg','png','jpeg'], key="upload_widget")
+        if up_input:
+            st.session_state.reg_img_bytes = up_input.getvalue()
 
-    # Common Processing Block
-    if img_input is not None:
-        st.write("---")
-        # Explicit button to process (prevents auto-run and glitching)
-        if st.button("🔍 Identify & Mark Attendance", type="primary"):
-            
-            with st.spinner("Processing image..."):
-                try:
-                    # 1. Read Image
-                    bytes_data = img_input.getvalue()
-                    img_bgr = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
+    # 3. Validation & SAVE
+    if st.button("Save User"):
+        if not new_name:
+            st.error("Please enter a name first.")
+        elif st.session_state.reg_img_bytes is None:
+             st.error("Please take a photo or upload one first.")
+        else:
+            status = st.status("Processing registration...", expanded=True)
+            try:
+                status.write("1. Reading image data...")
+                # Decode from Session State Bytes
+                bytes_data = st.session_state.reg_img_bytes
+                cv2_img = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
+                
+                h, w = cv2_img.shape[:2]
+                status.write(f"2. Image size: {w}x{h}")
+                
+                # Resize if massive (4k)
+                if w > 800:
+                    scale = 800 / w
+                    new_h = int(h * scale)
+                    cv2_img = cv2.resize(cv2_img, (800, new_h))
+                    status.write(f"3. Resized to {800}x{new_h}")
+                
+                rgb_img = cv2.cvtColor(cv2_img, cv2.COLOR_BGR2RGB)
+                
+                status.write("4. Detecting face...")
+                # Use standard model first, it's more accurate than hog for static images
+                face_locations = face_recognition.face_locations(rgb_img)
+                
+                if len(face_locations) == 1:
+                    status.write("5. Encoding face...")
+                    face_encodings = face_recognition.face_encodings(rgb_img, face_locations)
                     
-                    if img_bgr is None:
-                        st.error("Error reading image data.")
-                        st.stop()
-                    
-                    # 2. Resize for Speed (Max 800px width)
-                    height, width = img_bgr.shape[:2]
-                    if width > 800:
-                        scale = 800 / width
-                        img_bgr = cv2.resize(img_bgr, (0, 0), fx=scale, fy=scale)
-
-                    # 3. Convert to RGB
-                    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-                    
-                    # 4. Detect Faces
-                    face_locs = face_recognition.face_locations(img_rgb)
-                    face_encs = face_recognition.face_encodings(img_rgb, face_locs)
-
-                    # 5. Draw on Image
-                    # We work on img_bgr for drawing, then convert back to RGB for display
-                    # Or just draw on a copy of RGB
-                    img_display = img_rgb.copy()
-
-                    if not face_encs:
-                        st.warning("No faces detected! Please try again with a clearer photo.")
+                    if face_encodings:
+                        filename = f"{new_name.replace(' ', '_')}.jpg"
+                        path = os.path.join(IMG_FOLDER, filename)
+                        cv2.imwrite(path, cv2_img)
+                        
+                        status.update(label="Success!", state="complete", expanded=False)
+                        st.success(f"User '{new_name}' registered!")
+                        
+                        # Clear state
+                        st.session_state.reg_img_bytes = None
+                        st.cache_data.clear() 
                     else:
-                        st.success(f"Detected {len(face_encs)} face(s). Checking database...")
-                        
-                        count_identified = 0
-                        
-                        for enc, loc in zip(face_encs, face_locs):
-                            # Compare
-                            face_dist = face_recognition.face_distance(known_enc, enc)
-                            match_index = np.argmin(face_dist)
-                            min_dist = face_dist[match_index]
-                            
-                            # Threshold check
-                            if min_dist < 0.6:
-                                name = known_names[match_index]
-                                # Mark Attendance
-                                status = mark_in_csv(name)
-                                
-                                # Draw Box Green
-                                top, right, bottom, left = loc
-                                cv2.rectangle(img_display, (left, top), (right, bottom), (0, 255, 0), 2)
-                                
-                                # Label
-                                cv2.rectangle(img_display, (left, bottom - 35), (right, bottom), (0, 255, 0), cv2.FILLED)
-                                cv2.putText(img_display, name, (left + 6, bottom - 6), 
-                                            cv2.FONT_HERSHEY_DUPLEX, 0.8, (255, 255, 255), 1)
-                                
-                                st.success(f"✅ **{name}** - {status}")
-                                count_identified += 1
-                            else:
-                                # Unknown
-                                top, right, bottom, left = loc
-                                cv2.rectangle(img_display, (left, top), (right, bottom), (0, 0, 255), 2)
-                                cv2.putText(img_display, "Unknown", (left, bottom + 25), 
-                                            cv2.FONT_HERSHEY_DUPLEX, 0.8, (0, 0, 255), 1)
-                        
-                        if count_identified == 0:
-                            st.error("No registered users recognized.")
-                            
-                    # Display Final Image with Boxes
-                    st.image(img_display, caption="Processed Result", use_column_width=True)
+                        status.update(label="Encoding Error", state="error")
+                        st.error("Face detected but could not be encoded. Try better lighting.")
+                elif len(face_locations) == 0:
+                     status.update(label="No Face", state="error")
+                     st.error("❌ No face detected. Try a clearer photo.")
+                else:
+                     status.update(label="Multiple Faces", state="error")
+                     st.error("❌ Multiple faces detected.")
+                     
+            except Exception as e:
+                status.update(label="Error", state="error")
+                st.error(f"System Error: {e}")
 
-                except Exception as e:
-                    st.error(f"Error during processing: {e}")
-
-# --- VIEW LOG ---
-elif choice == "View Log":
-    st.subheader("Attendance Records")
-    if os.path.exists(FILE_DB):
-        df = pd.read_csv(FILE_DB)
-        st.dataframe(df.style.highlight_max(axis=0)) # simple style
-        
-        csv = df.to_csv(index=False).encode('utf-8')
-        st.download_button("Download CSV", csv, "attendance.csv", "text/csv")
+elif choice == "Check In":
+    st.subheader("📸 Face Recognition Check-In")
+    
+    with st.spinner("Loading Face Database..."):
+        known_encodings, known_names = load_registered_faces()
+    
+    if not known_names:
+        st.warning("Database empty. Please register or check Debug Info.")
     else:
-        st.info("No records found.")
+        st.write(f"Active Users: {len(known_names)}")
+        
+        # Helper function to process the image bytes
+        def process_checkin_image(img_bytes):
+            try:
+                cv2_img = cv2.imdecode(np.frombuffer(img_bytes, np.uint8), cv2.IMREAD_COLOR)
+                rgb_img = cv2.cvtColor(cv2_img, cv2.COLOR_BGR2RGB)
+                
+                face_locations = face_recognition.face_locations(rgb_img)
+                face_encodings = face_recognition.face_encodings(rgb_img, face_locations)
+                
+                found_match = False
+                out_img = cv2_img.copy()
+
+                for (top, right, bottom, left), face_encoding in zip(face_locations, face_encodings):
+                    matches = face_recognition.compare_faces(known_encodings, face_encoding, tolerance=0.5)
+                    name = "Unknown"
+
+                    if True in matches:
+                        first_match_index = matches.index(True)
+                        name = known_names[first_match_index]
+                        found_match = True
+                        success, msg = mark_attendance(name)
+                        if success:
+                            st.success(msg)
+                        else:
+                            st.info(msg)
+
+                    color = (0, 255, 0) if name != "Unknown" else (0, 0, 255)
+                    cv2.rectangle(out_img, (left, top), (right, bottom), color, 2)
+                    cv2.putText(out_img, name, (left, top - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
+                st.image(out_img, channels="BGR")
+                
+                if not found_match and len(face_locations) > 0:
+                    st.warning("Face detected but not recognized.")
+                elif len(face_locations) == 0:
+                    st.warning("No face detected in check-in photo.")
+            except Exception as e:
+                st.error(f"Error processing image: {e}")
+
+        # Tabs for Camera and Upload
+        tab1, tab2 = st.tabs(["📸 Camera", "📂 Upload"])
+        
+        with tab1:
+            cam_input = st.camera_input("Check In Camera")
+            if cam_input:
+                process_checkin_image(cam_input.getvalue())
+                
+        with tab2:
+            up_input = st.file_uploader("Upload Check-In Image", type=['jpg','png','jpeg'])
+            if up_input:
+                if st.button("Process Check-In"):
+                    process_checkin_image(up_input.getvalue())
+
+elif choice == "View Logs":
+    st.subheader("📊 Logs")
+    if os.path.exists(CSV_FILE):
+        try:
+            df = pd.read_csv(CSV_FILE)
+            st.dataframe(df)
+        except:
+            st.info("Empty logs.")
+    else:
+        st.info("No logs.")

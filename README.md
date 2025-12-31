@@ -1,4 +1,15 @@
-````markdown
+---
+title: Face Recognition Attendance System
+emoji: 📸
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+sdk_version: 1.35.0
+app_file: app.py
+pinned: false
+license: mit
+---
+
 # 📸 Face Recognition Attendance System
 
 A robust, real-time Facial Recognition system built with Python, OpenCV, and Streamlit. This project includes both a **Desktop Agent** (with Liveness Detection) and a **Web Application** (deployable to Streamlit Cloud).
