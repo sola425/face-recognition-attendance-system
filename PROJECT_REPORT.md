@@ -24,7 +24,7 @@ The system operates in two synchronized modes:
 | :--- | :--- | :--- |
 | **Primary Use Case** | Real-time security & daily attendance | Mobile registration & data querying |
 | **Performance** | High (60 FPS processing) | Moderate (Dependent on network) |
-| **Liveness Detection** | **Yes** (Blink detection via EAR logic) | No (Basic photo upload) |
+| **Liveness Detection** | **Yes** (Blink detection via EAR logic) | No (Basic photo snap) |
 | **Deployment** | Local Machine (School/Office Entry) | Cloud (Hugging Face) |
 
 ---
