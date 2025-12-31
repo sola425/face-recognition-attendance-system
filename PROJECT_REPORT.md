@@ -1,12 +1,12 @@
-
 # 📄 Project Execution Summary: Face Recognition Attendance System
 
 ## 1. Executive Summary
-This report outlines the development, optimization, and deployment of a dual-mode Face Recognition Attendance System. The project successfully integrates a robust Desktop Agent for high-performance real-time tracking with a cloud-based Web Application for accessibility.
+This report outlines the development, optimization, and deployment of a dual-mode Face Recognition Attendance System. The project successfully integrates a robust Desktop Agent for high-performance re[...] 
 
-**Key Achievement**: Successfully deployed a memory-intensive Computer Vision application to the cloud by migrating from Streamlit Cloud to a Dockerized Hugging Face Space, solving critical `dlib` compilation and memory constraints.
+**Key Achievement**: Successfully deployed a memory-intensive Computer Vision application to the cloud by migrating from Streamlit Cloud to a Dockerized Hugging Face Space, solving critical `dlib` com[...]
 
 ---
+
 
 ## 2. Technical Architecture
 
@@ -32,14 +32,14 @@ The system operates in two synchronized modes:
 ## 3. Project Execution & Challenges Solved
 
 ### 3.1 Challenge: The "Headless" vs. GUI Conflict
-- **Issue**: The cloud deployment requires a "headless" environment (no monitor), so we used `opencv-python-headless`. However, the Desktop Agent (`main.py`) requires a window to show the camera feed, which `headless` does not support. This caused a crash: `The function is not implemented.`
+- **Issue**: The cloud deployment requires a "headless" environment (no monitor), so we used `opencv-python-headless`. However, the Desktop Agent (`main.py`) requires a window to show the camera feed,[...]
 - **Solution**: Implemented a conditionally managed dependency strategy.
     - **Cloud (Docker)**: Uses `opencv-python-headless` to minimize size and prevent X11 errors.
     - **Local (Desktop)**: Switched to standard `opencv-python` to enable GUI windowing support.
     - **Result**: Both environments run stably without code modification, differing only in installed libraries.
 
 ### 3.2 Challenge: Memory Constraints on Cloud Free Tiers
-- **Issue**: The `face_recognition` library relies on `dlib`. Installing `dlib` requires compiling C++ code, which causes massive RAM spikes (often >2GB), leading to "Out of Memory" crashes on Streamlit Cloud's free tier.
+- **Issue**: The `face_recognition` library relies on `dlib`. Installing `dlib` requires compiling C++ code, which causes massive RAM spikes (often >2GB), leading to "Out of Memory" crashes on Streaml[...]
 - **Solution**: **Migration to Hugging Face Spaces**.
     - We utilized a custom **Dockerfile** to build the environment.
     - This allowed us to pre-compile binary dependencies in a robust container rather than building on-the-fly in a constrained runtime.
@@ -52,6 +52,10 @@ The system operates in two synchronized modes:
     - It focuses on the eyes (6 points each) to calculate the **Eye Aspect Ratio (EAR)**.
     - Threshold logic: If `EAR < 0.25` for `x` frames, a blink is registered.
     - **Security Rule**: Attendance is *only* marked if a verified blink is detected.
+
+### 3.4 Dlib installation challenge
+
+Installing the dlib dependency for the face recognition library was difficult, as the default pip install dlib repeatedly failed for the project’s Python version and Windows environment. To resolve this, an external precompiled dlib wheel specifically built for the required Python version (dlib-19.24.99-cp313-cp313-win_amd64.whl) was used, which was essential for successfully installing the face_recognition library and continuing system development.
 
 ---
 
